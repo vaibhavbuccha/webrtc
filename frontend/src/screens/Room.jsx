@@ -21,6 +21,7 @@ const RoomPage = () => {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true, preferCurrentTab: true, peerIdentity: true })
         const offer  = await peer.getoffer();
         socket.emit("user:call", { to: remoteSocketId, offer });
+        console.log(stream);
         setMyStream(stream);
     },[remoteSocketId])
 
@@ -32,33 +33,72 @@ const RoomPage = () => {
         socket.emit("call:accepted", { to: from, ans })
     },[socket, remoteSocketId])
 
-    const handleAcceptedCall = useCallback(({ from, ans}) => {
-        peer.setLocalDescription(ans)
-        console.log("call accepted")
+    const sendStream = useCallback(() => {
         for(const track of myStream.getTracks()){
             peer.peer.addTrack(track, myStream)
         }
-    },[socket, remoteSocketId, myStream])
+    },[myStream])
+
+    const handleAcceptedCall = useCallback(({ from, ans}) => {
+        peer.setLocalDescription(ans)
+        console.log("call accepted")
+        sendStream()
+    },[  sendStream])
+
+    const handleNegoNeeded = useCallback(async () => {
+        const offer = await peer.getoffer();
+        socket.emit('peer:nego:needed', {offer, to: remoteSocketId })
+    },[remoteSocketId, socket])
 
     useEffect(() => {
-        peer.peer.addEventListener('track', async ev => {
-            const remoteStream = ev.streams;
-            setRemoteStreams(remoteStream)
-        })
+        peer.peer.addEventListener('negotiationneeded',  handleNegoNeeded)
+
+        return() => {
+            peer.peer.removeEventListener('negotiationneeded',  handleNegoNeeded)
+        }
+    },[handleNegoNeeded])
+
+    const handletracks = async ev => {
+        const remoteStream = ev.streams;
+        console.log("GOT TRACKS!!", remoteStream)
+        setRemoteStreams(remoteStream[0])
+    }
+
+    useEffect(() => {
+        peer.peer.addEventListener('track', handletracks)
+
+        return() => {
+            peer.peer.removeEventListener('track',  handletracks)
+        }
     },[])
+
+    const handleNegoIncomming = useCallback(async ({from, offer}) => {
+        const ans = await peer.getAnswer(offer)
+        console.log("asns", ans)
+        socket.emit('peer:nego:done', { to: from, ans })
+    },[socket])
+
+    const handleNegoFinal = useCallback(async ({ans}) => {
+        await peer.setLocalDescription(ans)
+    },[socket])
 
     useEffect(() => {
         socket.on('user:joined', handleUserJoined ) 
         socket.on('incomming:call', handleIncommingCall)
         socket.on('call:accepted', handleAcceptedCall)
-
+        socket.on('peer:nego:needed', handleNegoIncomming)
+        socket.on('peer:nego:final', handleNegoFinal)
 
         return () => {
             socket.off("user:joined", handleUserJoined)
             socket.off('incomming:call', handleIncommingCall)
             socket.off('call:accepted', handleAcceptedCall)
+            socket.off('peer:nego:needed', handleNegoIncomming)
+            socket.off('peer:nego:final', handleNegoFinal)
         }
-    },[socket, handleUserJoined, handleIncommingCall])
+    },[socket, handleUserJoined, handleIncommingCall, handleAcceptedCall, handleNegoIncomming, handleNegoFinal])
+
+    
 
   return (
     <div>
@@ -68,12 +108,19 @@ const RoomPage = () => {
         {
             remoteSocketId ?  <p> Room ID: <b>Connected</b> </p> :  <p> Loading to join...</p>
         }
-
+        {
+            myStream && <button onClick={sendStream} >
+                Send Stream
+            </button>
+        }
         {
             myStream ? 
             <>
                 <h4>
                     My Stream
+                    {
+                        JSON.stringify(myStream)
+                    }
                 </h4>
                 <ReactPlayer 
                     height="300px"
@@ -90,7 +137,10 @@ const RoomPage = () => {
             remoteStreams ? 
             <>
                 <h4>
-                    User Stream
+                    User Stream 
+                    {
+                        JSON.stringify(remoteStreams)
+                    }
                 </h4>
                 <ReactPlayer 
                     height="300px"
