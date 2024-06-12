@@ -14,36 +14,36 @@ const RoomPage = () => {
     const handleUserJoined = useCallback((data) => {
         const { email, id} = data;
         setRemoteSocketId(id);
-        console.log(`${email} joined the room`)
+        console.log(`Email ${email} joined room`);
     },[])
 
     const handleCallUser = useCallback( async () => {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true, preferCurrentTab: true, peerIdentity: true })
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true })
         const offer  = await peer.getoffer();
         socket.emit("user:call", { to: remoteSocketId, offer });
-        console.log(stream);
         setMyStream(stream);
-    },[remoteSocketId])
+    },[remoteSocketId, socket])
 
     const handleIncommingCall = useCallback( async ({ from, offer }) => {
         setRemoteSocketId(from)
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true, preferCurrentTab: true, peerIdentity: true })
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true })
         setMyStream(stream);
         const ans = await peer.getAnswer(offer);
+        console.log(`Incoming Call`, from, offer);
         socket.emit("call:accepted", { to: from, ans })
     },[socket, remoteSocketId])
 
-    const sendStream = useCallback(() => {
-        for(const track of myStream.getTracks()){
-            peer.peer.addTrack(track, myStream)
-        }
+    const sendStreams = useCallback(() => {
+        for (const track of myStream.getTracks()) {
+            peer.peer.addTrack(track, myStream);
+          }
     },[myStream])
 
-    const handleAcceptedCall = useCallback(({ from, ans}) => {
+    const handleCallAccepted = useCallback(({ from, ans}) => {
         peer.setLocalDescription(ans)
         console.log("call accepted")
-        sendStream()
-    },[  sendStream])
+        sendStreams()
+    },[  sendStreams])
 
     const handleNegoNeeded = useCallback(async () => {
         const offer = await peer.getoffer();
@@ -52,16 +52,15 @@ const RoomPage = () => {
 
     useEffect(() => {
         peer.peer.addEventListener('negotiationneeded',  handleNegoNeeded)
-
         return() => {
             peer.peer.removeEventListener('negotiationneeded',  handleNegoNeeded)
         }
     },[handleNegoNeeded])
 
     const handletracks = async ev => {
-        const remoteStream = ev.streams;
+        const [remoteStream] = ev.streams;
         console.log("GOT TRACKS!!", remoteStream)
-        setRemoteStreams(remoteStream[0])
+        setRemoteStreams(remoteStream)
     }
 
     useEffect(() => {
@@ -85,18 +84,18 @@ const RoomPage = () => {
     useEffect(() => {
         socket.on('user:joined', handleUserJoined ) 
         socket.on('incomming:call', handleIncommingCall)
-        socket.on('call:accepted', handleAcceptedCall)
+        socket.on('call:accepted', handleCallAccepted)
         socket.on('peer:nego:needed', handleNegoIncomming)
         socket.on('peer:nego:final', handleNegoFinal)
 
         return () => {
             socket.off("user:joined", handleUserJoined)
             socket.off('incomming:call', handleIncommingCall)
-            socket.off('call:accepted', handleAcceptedCall)
+            socket.off('call:accepted', handleCallAccepted)
             socket.off('peer:nego:needed', handleNegoIncomming)
             socket.off('peer:nego:final', handleNegoFinal)
         }
-    },[socket, handleUserJoined, handleIncommingCall, handleAcceptedCall, handleNegoIncomming, handleNegoFinal])
+    },[socket, handleUserJoined, handleIncommingCall, handleCallAccepted, handleNegoIncomming, handleNegoFinal])
 
     
 
@@ -109,7 +108,7 @@ const RoomPage = () => {
             remoteSocketId ?  <p> Room ID: <b>Connected</b> </p> :  <p> Loading to join...</p>
         }
         {
-            myStream && <button onClick={sendStream} >
+            myStream && <button onClick={sendStreams} >
                 Send Stream
             </button>
         }
