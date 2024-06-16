@@ -13,8 +13,21 @@ const io = new Server(server, {
     cors: true
 });
 
+const joinRoom = () => {
+    console.log("user wants to join room.")
+}
+
+const createRoom = () => {
+    console.log("user wants to create room")
+}
+
+
 io.on('connection', (socket) => {
     console.log("user is connected")
+
+    socket.on("create-room", createRoom)
+
+    socket.on("join-room", joinRoom)
 
     socket.on("disconnect",() => {
         console.log("User is disconnected")

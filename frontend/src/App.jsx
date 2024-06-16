@@ -1,6 +1,7 @@
 import {Route, Routes} from 'react-router-dom'
 import LobbyScreen from './screens/Lobby'
 import RoomPage from './screens/Room'
+import HomePage from './screens/Home'
 import SocketID from 'socket.io-client'
 import { useEffect } from 'react'
 
@@ -17,7 +18,7 @@ function App() {
     <Routes>
         <Route  
           path='/'
-          element={<div> New Webrtc APP </div>}
+          element={<HomePage/>}
           exact
         />
         {/* <Route  
